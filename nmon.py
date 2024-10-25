@@ -21,9 +21,9 @@ Phi0 = 2.067e-15
 
 class Nmon:
 
-    def __init__(self, EJN=1, EJM=1) -> None:
-        self.N = 1
-        self.M = 1
+    def __init__(self, N=1, M=1, EJN=1, EJM=1) -> None:
+        self.N = N
+        self.M = M
 
         self.C_shunt = 1e-13
 
@@ -58,7 +58,7 @@ class Nmon:
 
         self.EC_total = e**2 / (2 * self.C_total) / hplank / 1e9 
 
-        self.dims = 6
+        self.dims = None
 
         self.theta_coefs = None
 
@@ -75,10 +75,14 @@ class Nmon:
         self.flux = None
         self.ng = None
 
-    def hamiltonian_calc(self, flux, ng, make_plot=False):
+    def hamiltonian_calc(self, flux, ng, num_levels=6, make_plot=False):
 
         self.flux = flux
         self.ng = ng
+
+        self.dims = num_levels
+
+        custom = None
 
         # custom = """
         # branches:
@@ -93,25 +97,26 @@ class Nmon:
         # - [JJ,1,4, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 6
         # """
 
-        # custom = """
-        # branches:
-        # - [C,1,0, """ + str(self.ECN) + """] # 0
-        # - [C,1,0, """ + str(self.ECM) + """] # 1
+        if self.N ==1 and self.M == 2:
 
-        # - [JJ,1,0, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
+            custom = """
+            branches:
+            - [C,1,0, """ + str(self.EC_shunt) + """] # 0
 
-        # - [JJ,2,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
-        # - [JJ,1,2, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
-        # """
+            - [JJ,1,0, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
 
-        custom = """
-        branches:
-        - [C,1,0, """ + str(self.EC_shunt) + """] # 0
+            - [JJ,2,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
+            - [JJ,1,2, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
+            """
+        elif self.N ==1 and self.M == 1:
+            custom = """
+            branches:
+            - [C,1,0, """ + str(self.EC_shunt) + """] # 0
 
-        - [JJ,1,0, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
+            - [JJ,1,0, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
 
-        - [JJ,1,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
-        """
+            - [JJ,1,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
+            """
 
         self.nmon_circ = scq.Circuit(custom, from_file=False, initiate_sym_calc=True, ext_basis="discretized", basis_completion="heuristic")
 
@@ -119,32 +124,41 @@ class Nmon:
         system_hierarchy = [list(np.arange(1, self.N + self.M))]
         scq.truncation_template(system_hierarchy)
 
-
-        self.nmon_circ.cutoff_n_1 = 31
-        # self.nmon_circ.cutoff_n_2 = 5
-        # self.nmon_circ.cutoff_n_3 = 5
-        # self.nmon_circ.cutoff_n_4 = 5
-        self.nmon_circ.configure(system_hierarchy=system_hierarchy, subsystem_trunc_dims=[6])
+        self.nmon_circ.cutoff_n_1 = 5
+        if self.N+self.M-1 > 1:
+            self.nmon_circ.cutoff_n_2 = 5
+        if self.N + self.M-1 > 2:
+            self.nmon_circ.cutoff_n_3 = 5
+        if self.N + self.M-1 > 3:
+            self.nmon_circ.cutoff_n_4 = 5
+        
+        self.nmon_circ.configure(system_hierarchy=system_hierarchy, subsystem_trunc_dims=[num_levels])
 
         self.nmon_circ.Φ1 = flux
-        self.nmon_circ.ng1 = ng
-        # self.nmon_circ.ng2 = 0.0
-        # self.nmon_circ.ng3 = 0.0
-        # self.nmon_circ.ng4 = 0.0
+
+        self.nmon_circ.ng1 = ng[0]
+        if self.N+self.M-1 > 1:
+            self.nmon_circ.ng2 = ng[1]
+        if self.N + self.M-1 > 2:
+            self.nmon_circ.ng3 = ng[2]
+        if self.N + self.M-1 > 3:
+            self.nmon_circ.ng4 = ng[3]
 
         self.calc_theta_phi_transform()
 
         ###################################################
 
-        transmon = scq.TunableTransmon(EJmax=self.EJM + self.EJN, EC=self.EC_total, d=0, flux=flux, ng=ng, ncut=31, truncated_dim=6)
-        tmon_evals = transmon.eigenvals()
-        if make_plot:
-            print("tmon", tmon_evals)
+        if self.M == 1 and self.N == 1:
+            transmon = scq.TunableTransmon(EJmax=self.EJM + self.EJN, EC=self.EC_total, d=0, flux=flux, ng=ng, ncut=31, truncated_dim=num_levels)
+            tmon_evals = transmon.eigenvals()
+            if make_plot:
+                print("tmon", tmon_evals)
 
         ###################################################
 
 
-        self.evals = self.nmon_circ.subsystems[0].eigenvals()
+        self.evals = self.nmon_circ.subsystems[0].eigenvals()[:num_levels]
+        # self.evals = self.nmon_circ.eigenvals()
         self.bound_state_energies = None
         
         if make_plot:
@@ -187,20 +201,46 @@ class Nmon:
     def calc_potential(self, make_plot=False):
         potential_list = np.zeros_like(self.phi_list)
         for i, phi in enumerate(self.phi_list):
-            potential_list[i] = self.nmon_circ.potential_energy(θ1=phi*self.theta_coefs[0],
-                                                                # θ2=phi*self.theta_coefs[1],
-                                                                # θ3 = phi*self.theta_coefs[2],
-                                                                # θ4 = phi*self.theta_coefs[3]
-                                                                )
+            if self.N + self.M-1 == 1:
+                potential_list[i] = self.nmon_circ.potential_energy(θ1=phi*self.theta_coefs[0],
+                                                                    # θ2=phi*self.theta_coefs[1],
+                                                                    # θ3 = phi*self.theta_coefs[2],
+                                                                    # θ4 = phi*self.theta_coefs[3]
+                                                                    )
+            elif self.N + self.M-1 == 2:
+                potential_list[i] = self.nmon_circ.potential_energy(θ1=phi*self.theta_coefs[0],
+                                                                    θ2=phi*self.theta_coefs[1],
+                                                                    # θ3 = phi*self.theta_coefs[2],
+                                                                    # θ4 = phi*self.theta_coefs[3]
+                                                                    )
+            elif self.N + self.M-1 == 3:
+                potential_list[i] = self.nmon_circ.potential_energy(θ1=phi*self.theta_coefs[0],
+                                                                    θ2=phi*self.theta_coefs[1],
+                                                                    θ3 = phi*self.theta_coefs[2],
+                                                                    # θ4 = phi*self.theta_coefs[3]
+                                                                    )
+            elif self.N + self.M-1 == 4:
+                potential_list[i] = self.nmon_circ.potential_energy(θ1=phi*self.theta_coefs[0],
+                                                                    θ2=phi*self.theta_coefs[1],
+                                                                    θ3 = phi*self.theta_coefs[2],
+                                                                    θ4 = phi*self.theta_coefs[3]
+                                                                    )
 
         max_pot = max(potential_list)
         bound_state_energies = []
-        while eval < max_pot or len(bound_state_energies) < 3:
+        i=0
+        while (self.evals[i] <= max_pot or len(bound_state_energies) < 100):
+            eval = self.evals[i]
         # for i, eval in enumerate(self.evals):
             if eval > max_pot:
+                pass
                 # break
-                print(f"Filling with a technically non-bound state {round(eval, 2)} (max pot {round(max_pot, 2)})")
+                # print(f"Filling with a technically non-bound state {round(eval, 2)} (max pot {round(max_pot, 2)})", "Len", len(bound_state_energies))
             bound_state_energies.append(eval)
+
+            i+=1
+            if i >= len(self.evals):
+                break
             
         # print("bound_states", bound_state_energies)
 
