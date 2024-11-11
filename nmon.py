@@ -17,6 +17,7 @@ import scqubits.core.units as units
 import scipy.sparse.linalg as spla
 import sympy as sp
 import itertools
+import tensorflow as tf
 
 e = 1.6e-19
 hplank = 6.626e-34
@@ -94,6 +95,19 @@ class Nmon:
             - [JJ,2,3, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
             - [JJ,1,2, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
             """
+        
+        elif self.N ==1 and self.M == 4:
+            custom = """
+            branches:
+            - [C,1,0, """ + str(self.EC_shunt) + """] # 0
+
+            - [JJ,1,0, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
+
+            - [JJ,4,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
+            - [JJ,3,4, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
+            - [JJ,2,3, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
+            - [JJ,1,2, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
+            """
 
         elif self.N ==2 and self.M == 3:
             custom = """
@@ -106,6 +120,18 @@ class Nmon:
             - [JJ,3,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
             - [JJ,4,3, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
             - [JJ,1,4, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
+            """
+        
+        elif self.N ==2 and self.M == 2:
+            custom = """
+            branches:
+            - [C,1,0, """ + str(self.EC_shunt) + """] # 0
+
+            - [JJ,2,0, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
+            - [JJ,1,2, """ + str(self.EJN) + """, """ + str(self.ECJN) + """] # 2
+
+            - [JJ,3,0, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 4
+            - [JJ,1,3, """ + str(self.EJM) + """, """ + str(self.ECJM) + """] # 5
             """
 
         elif self.N ==1 and self.M == 2:
@@ -138,18 +164,24 @@ class Nmon:
 
         if self.N+self.M-1 == 1:
             self.nmon_circ.cutoff_n_1 = 31
-        if self.N+self.M-1 == 2:
+        elif self.N+self.M-1 == 2:
             self.nmon_circ.cutoff_n_1 = 6
             self.nmon_circ.cutoff_n_2 = 6
-        if self.N + self.M-1 == 3:
-            self.nmon_circ.cutoff_n_1 = 3
-            self.nmon_circ.cutoff_n_2 = 3
-            self.nmon_circ.cutoff_n_3 = 3
-        if self.N + self.M-1 > 3:
+        elif self.N + self.M-1 == 3:
+            self.nmon_circ.cutoff_n_1 = 2
+            self.nmon_circ.cutoff_n_2 = 2
+            self.nmon_circ.cutoff_n_3 = 2
+        elif self.N + self.M-1 == 4:
             self.nmon_circ.cutoff_n_1 = 2
             self.nmon_circ.cutoff_n_2 = 2
             self.nmon_circ.cutoff_n_3 = 2
             self.nmon_circ.cutoff_n_4 = 2
+        elif self.N + self.M-1 == 5:
+            self.nmon_circ.cutoff_n_1 = 1
+            self.nmon_circ.cutoff_n_2 = 1
+            self.nmon_circ.cutoff_n_3 = 1
+            self.nmon_circ.cutoff_n_4 = 1
+            self.nmon_circ.cutoff_n_5 = 1
         
         # self.nmon_circ.configure(system_hierarchy=system_hierarchy, subsystem_trunc_dims=[num_levels])
             
@@ -172,6 +204,8 @@ class Nmon:
             self.nmon_circ.ng3 = ng[2]
         if self.N + self.M-1 > 3:
             self.nmon_circ.ng4 = ng[3]
+        if self.N + self.M-1 > 4:
+            self.nmon_circ.ng4 = ng[4]
 
         self.calc_theta_phi_transform()
 
@@ -194,13 +228,26 @@ class Nmon:
         self.H = self.nmon_circ.hamiltonian()#.toarray() # sparse array
         self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
 
-        eigenvalues, eigenvectors = spla.eigsh(self.H, k=self.dims, which='SA')
+        # Convert to dense NumPy array
+        try:
+            dense_matrix = self.H.toarray()
+        except Exception:
+            dense_matrix = self.H
+
+        # Solve eigenvalue problem
+        eigenvalues, eigenvectors = tf.linalg.eigh(dense_matrix)
+        # Convert to numpy for inspection (if needed)
+        eigenvalues = eigenvalues.numpy()
+        eigenvectors = eigenvectors.numpy()
+        
         # Sort eigenvalues and eigenvectors
         idx = np.argsort(eigenvalues.real)
 
         self.evals = eigenvalues[idx]
         self.evecs = eigenvectors[:, idx]
     
+        self.evals = self.evals[:self.dims]
+        self.evecs = self.evecs[:, :self.dims]
 
         self.bound_state_energies = self.evals.copy()
         
@@ -451,20 +498,41 @@ class Nmon:
 
         G_ng = gradient_func(*n_grids)
 
-        transition_matrix = np.zeros((num_levels, num_levels), dtype=np.complex128)
+        transition_matrix = np.zeros((num_levels, num_levels), dtype=float)
 
         for i in range(num_levels):
             psi_i = eigenvectors_md[..., i]
             for j in range(num_levels):
                 psi_j = eigenvectors_md[..., j]
                 # Compute the element-wise product and sum over all indices
-                M_ij = np.sum(np.conj(psi_i) * G_ng * psi_j)
-                transition_matrix[i, j] = M_ij
+                M_ij = np.sum(np.conj(psi_i) * G_ng * psi_j) / ( np.sum(np.conj(psi_i) * psi_i) * np.sum(np.conj(psi_j) * psi_j) )
+                transition_matrix[i, j] = np.real(M_ij)
 
         self.transition_matrix = transition_matrix
 
         if make_plot:
-            plt.imshow(np.absolute(transition_matrix[:, :]), cmap='viridis', interpolation='nearest')
+
+            transition_matrix = np.abs(transition_matrix)
+
+            # Plot heatmap
+            fig, ax = plt.subplots(figsize=(11, 10))
+            cax = ax.imshow(transition_matrix, cmap='GnBu', interpolation='nearest')
+
+            # Add text annotations for each cell
+            for i in range(transition_matrix.shape[0]):
+                for j in range(transition_matrix.shape[1]):
+                    ax.text(j, i, f'{transition_matrix[i, j]:.2E}', ha='center', va='center', color='black')
+
+            # Colorbar
+            cbar = fig.colorbar(cax)
+            plt.show()
+
+            
+            diagonal_elements = np.abs(np.diag(transition_matrix))
+            mask = np.abs(transition_matrix) >= 1e-2 #diagonal_elements[:, None]
+            np.fill_diagonal(mask, 0)
+            result_matrix = mask.astype(int)
+            plt.imshow(np.absolute(result_matrix[:, :]), cmap='viridis', interpolation='nearest')
             plt.colorbar()
             plt.show()
 
@@ -473,21 +541,45 @@ class Nmon:
 
         def find_dominating_transitions(matrix):
             n = matrix.shape[0]  # Number of states
-            current_state = 0  # Start from state 0
-            transitions = []
-            # We will look for a maximum of n-1 transitions to avoid an infinite loop
-            for _ in range(n - 1):
-                # Find the index of the maximum element in the current row (dominating transition)
-                next_state = (current_state+1)+np.argmax(matrix[current_state][current_state+1:])
-                if next_state < n and \
-                    matrix[current_state, next_state] >= 10*matrix[current_state, current_state]:
-                    # Store the transition and its value
-                    transitions.append((current_state, next_state, matrix[current_state, next_state]))
-                    # Move to the next state
-                    current_state = next_state
 
-                if next_state == n-1:
-                    break
+            transitions = []
+            start_state = 0
+            while len(transitions) == 0 and start_state < n-1: 
+
+                current_state = start_state  # Start from state 0
+                
+
+                # We will look for a maximum of n-1 transitions to avoid an infinite loop
+                for _ in range(n - 1):
+
+                    # Find the index of the maximum element in the current row (dominating transition)
+                    # next_state = (current_state+1)+np.argmax(matrix[current_state][current_state+1:])
+                    
+                    # print(matrix[current_state][current_state+1:])
+                    # print(matrix[current_state, current_state])
+
+                    # print(np.where(np.array(matrix[current_state][current_state+1:]) 
+                    #                                            >= 1e3*matrix[current_state, current_state]))
+                    
+                    next_state_index = np.where(np.array(matrix[current_state][current_state+1:]) 
+                                                            >= 1e-2 )[0]
+                    
+                    if len(next_state_index) == 0:
+                        break
+
+                    next_state = (current_state+1) + next_state_index[0]
+
+                    if next_state < n:
+                        # Store the transition and its value
+                        transitions.append((current_state, next_state, matrix[current_state, next_state]))
+                        # Move to the next state
+                        current_state = next_state
+
+                    if next_state >= n-1:
+                        break
+
+                start_state += 1
+
             return transitions
 
         dominating_transitions = None
@@ -498,6 +590,8 @@ class Nmon:
             dominating_transitions = [[0, 1, 0], [1, 2, 0], [2, 3, 0]]
         else:
             dominating_transitions = self.ready_dominating_transitions
+
+        self.ready_dominating_transitions = dominating_transitions
 
         self.transition_freqs = []
         for i, transition in enumerate(dominating_transitions):
