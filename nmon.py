@@ -193,25 +193,25 @@ class Nmon:
     def hamiltonian_calc(self, flux, ng, make_plot=False, num_levels=6, just_H=False, cutoff=6):
 
         if self.N+self.M-1 == 1:
-            self.nmon_circ.cutoff_n_1 = 31
+            self.nmon_circ.cutoff_n_1 = cutoff
         elif self.N+self.M-1 == 2:
             self.nmon_circ.cutoff_n_1 = cutoff
             self.nmon_circ.cutoff_n_2 = cutoff
         elif self.N + self.M-1 == 3:
-            self.nmon_circ.cutoff_n_1 = 2
-            self.nmon_circ.cutoff_n_2 = 2
-            self.nmon_circ.cutoff_n_3 = 2
+            self.nmon_circ.cutoff_n_1 = cutoff
+            self.nmon_circ.cutoff_n_2 = cutoff
+            self.nmon_circ.cutoff_n_3 = cutoff
         elif self.N + self.M-1 == 4:
-            self.nmon_circ.cutoff_n_1 = 2
-            self.nmon_circ.cutoff_n_2 = 2
-            self.nmon_circ.cutoff_n_3 = 2
-            self.nmon_circ.cutoff_n_4 = 2
+            self.nmon_circ.cutoff_n_1 = cutoff
+            self.nmon_circ.cutoff_n_2 = cutoff
+            self.nmon_circ.cutoff_n_3 = cutoff
+            self.nmon_circ.cutoff_n_4 = cutoff
         elif self.N + self.M-1 == 5:
-            self.nmon_circ.cutoff_n_1 = 1
-            self.nmon_circ.cutoff_n_2 = 1
-            self.nmon_circ.cutoff_n_3 = 1
-            self.nmon_circ.cutoff_n_4 = 1
-            self.nmon_circ.cutoff_n_5 = 1
+            self.nmon_circ.cutoff_n_1 = cutoff
+            self.nmon_circ.cutoff_n_2 = cutoff
+            self.nmon_circ.cutoff_n_3 = cutoff
+            self.nmon_circ.cutoff_n_4 = cutoff
+            self.nmon_circ.cutoff_n_5 = cutoff
 
         self.dims = num_levels
 
@@ -636,52 +636,9 @@ class Nmon:
 
 
 
-def mean_normalized_std(*arrays):
-    # Stack the arrays along a new axis to enable element-wise operations
-    stacked = np.stack(arrays, axis=0)
-    
-    # Element-wise std and mean across the stacked arrays
-    element_wise_std = np.std(stacked, axis=0)
-    # print("std", element_wise_std)
-    element_wise_mean = np.mean(stacked, axis=0)
-    # print("mean", element_wise_mean)
-
-    # print("std / mean", element_wise_std/element_wise_mean)
-    
-    # Normalize std by mean, avoiding division by zero
-    normalized = np.zeros_like(element_wise_mean)
-    non_zero_mean_mask = element_wise_mean != 0
-    normalized[non_zero_mean_mask] = element_wise_std[non_zero_mean_mask] / element_wise_mean[non_zero_mean_mask]
-    
-    # Return the mean of normalized values
-    return np.mean(normalized[non_zero_mean_mask]), normalized[0]
-
-def mean_normalized_max_diff(*arrays):
-    # Stack the arrays along a new axis to enable element-wise operations
-    stacked = np.stack(arrays, axis=0)
-    
-    # Element-wise maximum difference
-    element_wise_max_diff = np.max(stacked, axis=0) - np.min(stacked, axis=0)
-    
-    # Element-wise mean across the stacked arrays
-    element_wise_mean = np.mean(stacked, axis=0)
-    
-    # Normalize max difference by mean, avoiding division by zero
-    normalized = np.zeros_like(element_wise_mean)
-    non_zero_mean_mask = element_wise_mean != 0
-    normalized[non_zero_mean_mask] = element_wise_max_diff[non_zero_mean_mask] / element_wise_mean[non_zero_mean_mask]
-    
-    # Return the mean of normalized values
-    return np.mean(normalized[non_zero_mean_mask]), normalized[0]
-
-
-def mean_normalized_max_sum_diff(*arrays):
-    # Compute the sum of all elements for each array
-    sums = [np.sum(arr) for arr in arrays]
-    
-    # Calculate max and min of the sums
-    max_sum = np.max(sums)
-    min_sum = np.min(sums)
-    
-    # Return the normalized difference
-    return (max_sum - min_sum) / max_sum
+def compute_cutoff(EJN, EJM, EC, cutoff_space=[2, 10]):
+    """Logarithmically adjust the cutoff based on max(EJN/EC, EJM/EC)."""
+    ratio = max(EJN / EC, EJM / EC)
+    # Map log10(ratio) from [log10(1), log10(100)] to [2, 10]
+    cutoff = np.interp(np.log10(ratio), [0, 2], cutoff_space)
+    return int(np.ceil(cutoff))
