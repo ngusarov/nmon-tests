@@ -19,6 +19,9 @@ import sympy as sp
 import itertools
 import tensorflow as tf
 
+from itertools import combinations_with_replacement
+import heapq
+
 e = 1.6e-19
 hplank = 6.626e-34
 Phi0 = 2.067e-15
@@ -165,8 +168,8 @@ class Nmon:
         if self.N+self.M-1 == 1:
             self.nmon_circ.cutoff_n_1 = 31
         elif self.N+self.M-1 == 2:
-            self.nmon_circ.cutoff_n_1 = 6
-            self.nmon_circ.cutoff_n_2 = 6
+            self.nmon_circ.cutoff_n_1 = 10
+            self.nmon_circ.cutoff_n_2 = 10
         elif self.N + self.M-1 == 3:
             self.nmon_circ.cutoff_n_1 = 2
             self.nmon_circ.cutoff_n_2 = 2
@@ -187,7 +190,28 @@ class Nmon:
             
 
 
-    def hamiltonian_calc(self, flux, ng, make_plot=False, num_levels=6):
+    def hamiltonian_calc(self, flux, ng, make_plot=False, num_levels=6, just_H=False, cutoff=6):
+
+        if self.N+self.M-1 == 1:
+            self.nmon_circ.cutoff_n_1 = 31
+        elif self.N+self.M-1 == 2:
+            self.nmon_circ.cutoff_n_1 = cutoff
+            self.nmon_circ.cutoff_n_2 = cutoff
+        elif self.N + self.M-1 == 3:
+            self.nmon_circ.cutoff_n_1 = 2
+            self.nmon_circ.cutoff_n_2 = 2
+            self.nmon_circ.cutoff_n_3 = 2
+        elif self.N + self.M-1 == 4:
+            self.nmon_circ.cutoff_n_1 = 2
+            self.nmon_circ.cutoff_n_2 = 2
+            self.nmon_circ.cutoff_n_3 = 2
+            self.nmon_circ.cutoff_n_4 = 2
+        elif self.N + self.M-1 == 5:
+            self.nmon_circ.cutoff_n_1 = 1
+            self.nmon_circ.cutoff_n_2 = 1
+            self.nmon_circ.cutoff_n_3 = 1
+            self.nmon_circ.cutoff_n_4 = 1
+            self.nmon_circ.cutoff_n_5 = 1
 
         self.dims = num_levels
 
@@ -225,17 +249,20 @@ class Nmon:
 
 
 
-        self.H = self.nmon_circ.hamiltonian()#.toarray() # sparse array
+        self.H = self.nmon_circ.hamiltonian() # sparse array (or not)
+        # Convert to dense NumPy array
+        if type(self.H) == scipy.sparse._csc.csc_matrix:
+            self.H = self.H.toarray()
+        
+        if just_H:
+            return self.H
+
         self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
 
-        # Convert to dense NumPy array
-        try:
-            dense_matrix = self.H.toarray()
-        except Exception:
-            dense_matrix = self.H
+
 
         # Solve eigenvalue problem
-        eigenvalues, eigenvectors = tf.linalg.eigh(dense_matrix)
+        eigenvalues, eigenvectors = tf.linalg.eigh(self.H)
         # Convert to numpy for inspection (if needed)
         eigenvalues = eigenvalues.numpy()
         eigenvectors = eigenvectors.numpy()
@@ -607,3 +634,54 @@ class Nmon:
             # print("w12 - w01", self.transition_freqs[1] - self.transition_freqs[0])
             self.relative_anharm = (self.transition_freqs[1] - self.transition_freqs[0]) / self.transition_freqs[0]
 
+
+
+def mean_normalized_std(*arrays):
+    # Stack the arrays along a new axis to enable element-wise operations
+    stacked = np.stack(arrays, axis=0)
+    
+    # Element-wise std and mean across the stacked arrays
+    element_wise_std = np.std(stacked, axis=0)
+    # print("std", element_wise_std)
+    element_wise_mean = np.mean(stacked, axis=0)
+    # print("mean", element_wise_mean)
+
+    # print("std / mean", element_wise_std/element_wise_mean)
+    
+    # Normalize std by mean, avoiding division by zero
+    normalized = np.zeros_like(element_wise_mean)
+    non_zero_mean_mask = element_wise_mean != 0
+    normalized[non_zero_mean_mask] = element_wise_std[non_zero_mean_mask] / element_wise_mean[non_zero_mean_mask]
+    
+    # Return the mean of normalized values
+    return np.mean(normalized[non_zero_mean_mask]), normalized[0]
+
+def mean_normalized_max_diff(*arrays):
+    # Stack the arrays along a new axis to enable element-wise operations
+    stacked = np.stack(arrays, axis=0)
+    
+    # Element-wise maximum difference
+    element_wise_max_diff = np.max(stacked, axis=0) - np.min(stacked, axis=0)
+    
+    # Element-wise mean across the stacked arrays
+    element_wise_mean = np.mean(stacked, axis=0)
+    
+    # Normalize max difference by mean, avoiding division by zero
+    normalized = np.zeros_like(element_wise_mean)
+    non_zero_mean_mask = element_wise_mean != 0
+    normalized[non_zero_mean_mask] = element_wise_max_diff[non_zero_mean_mask] / element_wise_mean[non_zero_mean_mask]
+    
+    # Return the mean of normalized values
+    return np.mean(normalized[non_zero_mean_mask]), normalized[0]
+
+
+def mean_normalized_max_sum_diff(*arrays):
+    # Compute the sum of all elements for each array
+    sums = [np.sum(arr) for arr in arrays]
+    
+    # Calculate max and min of the sums
+    max_sum = np.max(sums)
+    min_sum = np.min(sums)
+    
+    # Return the normalized difference
+    return (max_sum - min_sum) / max_sum
