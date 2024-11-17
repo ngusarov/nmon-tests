@@ -63,6 +63,7 @@ class Nmon:
         self.theta_coefs = None
 
         self.H = None
+        self.H_sparse = None
         self.sym_hamiltonian = None
         self.evecs = None
         self.evals = None
@@ -250,8 +251,10 @@ class Nmon:
 
 
         self.H = self.nmon_circ.hamiltonian() # sparse array (or not)
+        print("type: ", type(self.H))
         # Convert to dense NumPy array
         if type(self.H) == scipy.sparse._csc.csc_matrix:
+            self.H_sparse = self.H
             self.H = self.H.toarray()
         
         if just_H:
