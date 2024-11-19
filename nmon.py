@@ -63,7 +63,7 @@ class Nmon:
         self.theta_coefs = None
 
         self.H = None
-        self.H_sparse = None
+        self.H_arr = None
         self.sym_hamiltonian = None
         self.evecs = None
         self.evals = None
@@ -165,33 +165,14 @@ class Nmon:
         #----------------
         # system_hierarchy = [0]#[list(np.arange(1, self.N + self.M))]
         # scq.truncation_template(system_hierarchy)
-
-        if self.N+self.M-1 == 1:
-            self.nmon_circ.cutoff_n_1 = 31
-        elif self.N+self.M-1 == 2:
-            self.nmon_circ.cutoff_n_1 = 10
-            self.nmon_circ.cutoff_n_2 = 10
-        elif self.N + self.M-1 == 3:
-            self.nmon_circ.cutoff_n_1 = 2
-            self.nmon_circ.cutoff_n_2 = 2
-            self.nmon_circ.cutoff_n_3 = 2
-        elif self.N + self.M-1 == 4:
-            self.nmon_circ.cutoff_n_1 = 2
-            self.nmon_circ.cutoff_n_2 = 2
-            self.nmon_circ.cutoff_n_3 = 2
-            self.nmon_circ.cutoff_n_4 = 2
-        elif self.N + self.M-1 == 5:
-            self.nmon_circ.cutoff_n_1 = 1
-            self.nmon_circ.cutoff_n_2 = 1
-            self.nmon_circ.cutoff_n_3 = 1
-            self.nmon_circ.cutoff_n_4 = 1
-            self.nmon_circ.cutoff_n_5 = 1
         
         # self.nmon_circ.configure(system_hierarchy=system_hierarchy, subsystem_trunc_dims=[num_levels])
             
 
 
     def hamiltonian_calc(self, flux, ng, make_plot=False, num_levels=6, just_H=False, cutoff=6):
+
+        self.flag_calc_transitions = False
 
         if self.N+self.M-1 == 1:
             self.nmon_circ.cutoff_n_1 = cutoff
@@ -251,35 +232,38 @@ class Nmon:
 
 
         self.H = self.nmon_circ.hamiltonian() # sparse array (or not)
-        print("type: ", type(self.H))
-        # Convert to dense NumPy array
-        if type(self.H) == scipy.sparse._csc.csc_matrix:
-            self.H_sparse = self.H
-            self.H = self.H.toarray()
         
+        if type(self.H) == scipy.sparse._csc.csc_matrix:
+            self.H_arr = self.H.toarray()
+        else:
+            self.H_arr = self.H
+
         if just_H:
             return self.H
 
-        self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
+        # self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
 
+        eigenvalues, eigenvectors = None, None
+        
+        if (self.N==1 and self.M==1) or cutoff <= 4:
+            # Convert to dense NumPy array
 
-
-        # Solve eigenvalue problem
-        eigenvalues, eigenvectors = tf.linalg.eigh(self.H)
-        # Convert to numpy for inspection (if needed)
-        eigenvalues = eigenvalues.numpy()
-        eigenvectors = eigenvectors.numpy()
+            eigenvalues, eigenvectors = tf.linalg.eigh(self.H_arr)
+            # Convert to numpy for inspection (if needed)
+            eigenvalues = eigenvalues.numpy()
+            eigenvectors = eigenvectors.numpy()
+        else:
+            eigenvalues, eigenvectors = spla.eigsh(self.H, which='SA', k=self.dims)
         
         # Sort eigenvalues and eigenvectors
         idx = np.argsort(eigenvalues.real)
-
         self.evals = eigenvalues[idx]
         self.evecs = eigenvectors[:, idx]
     
         self.evals = self.evals[:self.dims]
         self.evecs = self.evecs[:, :self.dims]
 
-        self.bound_state_energies = self.evals.copy()
+        self.bound_state_energies = self.evals
         
 
 
@@ -292,8 +276,8 @@ class Nmon:
 
         # self.calc_wavefunctions(make_plot=make_plot)
 
-        self.transition_matrix = None
-        self.calc_transition_matrix(make_plot=make_plot)
+        # self.transition_matrix = None
+        # self.calc_transition_matrix(make_plot=make_plot)
 
         self.transition_freqs = []
         self.relative_anharm = None
@@ -617,7 +601,7 @@ class Nmon:
             # Find and print the dominating transitions starting from state 0
             dominating_transitions = find_dominating_transitions(np.absolute(self.transition_matrix))
         elif self.ready_dominating_transitions == None:
-            dominating_transitions = [[0, 1, 0], [1, 2, 0], [2, 3, 0]]
+            dominating_transitions = [[0, 1, 0], [1, 2, 0]]
         else:
             dominating_transitions = self.ready_dominating_transitions
 
@@ -639,9 +623,22 @@ class Nmon:
 
 
 
-def compute_cutoff(EJN, EJM, EC, cutoff_space=[2, 10]):
+def compute_cutoff(EJN, EJM, EC, cutoff_space=[2, 8]):
     """Logarithmically adjust the cutoff based on max(EJN/EC, EJM/EC)."""
-    ratio = max(EJN / EC, EJM / EC)
+
+    # Define a modified interpolation function that applies a slight distortion
+    def distorted_interp_function(ratio):
+        base = np.interp(np.log10(ratio), [0, 2], cutoff_space)
+        if ratio <= 20:
+            distortion_factor = 1.2
+            midpoint_adjustment = distortion_factor * (1 - np.abs(np.log10(ratio) - np.log10(20)))  # Distortion closer to midpoint
+            return np.floor(base - midpoint_adjustment)
+        # return np.round(base - midpoint_adjustment)
+        distortion_factor = 2.2
+        midpoint_adjustment = distortion_factor * (1 - np.abs(np.log10(ratio) - np.log10(20)))  # Distortion closer to midpoint
+        return round(base - midpoint_adjustment + 0.5)
+
     # Map log10(ratio) from [log10(1), log10(100)] to [2, 10]
-    cutoff = np.interp(np.log10(ratio), [0, 2], cutoff_space)
-    return int(np.ceil(cutoff))
+    cutoff_N = distorted_interp_function(EJN / EC)
+    cutoff_M = distorted_interp_function(EJM / EC)
+    return int(np.round(np.sqrt((cutoff_M**2 + cutoff_N**2)/2)))
