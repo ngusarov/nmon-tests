@@ -2602,7 +2602,7 @@ static CYTHON_INLINE char *__pyx_f_5numpy_7ndarray_4data_data(PyArrayObject *__p
 
 /* Module declarations from "np_eigh_cython" */
 /* #### Code section: typeinfo ### */
-static __Pyx_TypeInfo __Pyx_TypeInfo___pyx_t_double_complex = { "double complex", NULL, sizeof(__pyx_t_double_complex), { 0 }, 0, 'C', 0, 0 };
+static __Pyx_TypeInfo __Pyx_TypeInfo_nn___pyx_t_5numpy_float64_t = { "float64_t", NULL, sizeof(__pyx_t_5numpy_float64_t), { 0 }, 0, 'R', 0, 0 };
 /* #### Code section: before_global_var ### */
 #define __Pyx_MODULE_NAME "np_eigh_cython"
 extern int __pyx_module_is_main_np_eigh_cython;
@@ -4661,7 +4661,7 @@ static CYTHON_INLINE NPY_DATETIMEUNIT __pyx_f_5numpy_get_datetime64_unit(PyObjec
 /* "np_eigh_cython.pyx":7
  * 
  * # Define function to compute eigenvalues and eigenvectors
- * def compute_eigsh_np(cnp.ndarray[cnp.complex128_t, ndim=2] H):             # <<<<<<<<<<<<<<
+ * def compute_eigsh_np(cnp.ndarray[cnp.float64_t, ndim=2] H):             # <<<<<<<<<<<<<<
  *     """
  *     Compute eigenvalues and eigenvectors of a Hermitian matrix using NumPy's eigh.
  */
@@ -4787,7 +4787,7 @@ static PyObject *__pyx_pf_14np_eigh_cython_compute_eigsh_np(CYTHON_UNUSED PyObje
   __pyx_pybuffernd_H.rcbuffer = &__pyx_pybuffer_H;
   {
     __Pyx_BufFmt_StackElem __pyx_stack[1];
-    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_H.rcbuffer->pybuffer, (PyObject*)__pyx_v_H, &__Pyx_TypeInfo___pyx_t_double_complex, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(1, 7, __pyx_L1_error)
+    if (unlikely(__Pyx_GetBufferAndValidate(&__pyx_pybuffernd_H.rcbuffer->pybuffer, (PyObject*)__pyx_v_H, &__Pyx_TypeInfo_nn___pyx_t_5numpy_float64_t, PyBUF_FORMAT| PyBUF_STRIDES, 2, 0, __pyx_stack) == -1)) __PYX_ERR(1, 7, __pyx_L1_error)
   }
   __pyx_pybuffernd_H.diminfo[0].strides = __pyx_pybuffernd_H.rcbuffer->pybuffer.strides[0]; __pyx_pybuffernd_H.diminfo[0].shape = __pyx_pybuffernd_H.rcbuffer->pybuffer.shape[0]; __pyx_pybuffernd_H.diminfo[1].strides = __pyx_pybuffernd_H.rcbuffer->pybuffer.strides[1]; __pyx_pybuffernd_H.diminfo[1].shape = __pyx_pybuffernd_H.rcbuffer->pybuffer.shape[1];
 
@@ -4828,7 +4828,7 @@ static PyObject *__pyx_pf_14np_eigh_cython_compute_eigsh_np(CYTHON_UNUSED PyObje
   /* "np_eigh_cython.pyx":7
  * 
  * # Define function to compute eigenvalues and eigenvectors
- * def compute_eigsh_np(cnp.ndarray[cnp.complex128_t, ndim=2] H):             # <<<<<<<<<<<<<<
+ * def compute_eigsh_np(cnp.ndarray[cnp.float64_t, ndim=2] H):             # <<<<<<<<<<<<<<
  *     """
  *     Compute eigenvalues and eigenvectors of a Hermitian matrix using NumPy's eigh.
  */
@@ -4936,7 +4936,7 @@ static CYTHON_SMALL_CODE int __Pyx_InitCachedConstants(void) {
   /* "np_eigh_cython.pyx":7
  * 
  * # Define function to compute eigenvalues and eigenvectors
- * def compute_eigsh_np(cnp.ndarray[cnp.complex128_t, ndim=2] H):             # <<<<<<<<<<<<<<
+ * def compute_eigsh_np(cnp.ndarray[cnp.float64_t, ndim=2] H):             # <<<<<<<<<<<<<<
  *     """
  *     Compute eigenvalues and eigenvectors of a Hermitian matrix using NumPy's eigh.
  */
@@ -5402,7 +5402,7 @@ if (!__Pyx_RefNanny) {
   /* "np_eigh_cython.pyx":7
  * 
  * # Define function to compute eigenvalues and eigenvectors
- * def compute_eigsh_np(cnp.ndarray[cnp.complex128_t, ndim=2] H):             # <<<<<<<<<<<<<<
+ * def compute_eigsh_np(cnp.ndarray[cnp.float64_t, ndim=2] H):             # <<<<<<<<<<<<<<
  *     """
  *     Compute eigenvalues and eigenvectors of a Hermitian matrix using NumPy's eigh.
  */

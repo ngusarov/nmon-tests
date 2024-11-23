@@ -18,6 +18,7 @@ import scipy.sparse.linalg as spla
 import sympy as sp
 import itertools
 import tensorflow as tf
+from numba import njit
 
 from itertools import combinations_with_replacement
 import heapq
@@ -25,6 +26,11 @@ import heapq
 e = 1.6e-19
 hplank = 6.626e-34
 Phi0 = 2.067e-15
+
+
+@njit
+def compute_eigh(H):
+    return np.linalg.eigh(H)
 
 class Nmon:
 
@@ -234,24 +240,32 @@ class Nmon:
         self.H = self.nmon_circ.hamiltonian() # sparse array (or not)
         
         if type(self.H) == scipy.sparse._csc.csc_matrix:
-            self.H_arr = self.H.toarray()
+            self.H_arr = self.H.toarray() # TODO make real
         else:
-            self.H_arr = self.H
+            self.H_arr = self.H # TODO make real
+
+        self.H = scipy.sparse.csr_matrix(np.absolute(self.H))
+        self.H_arr = np.absolute(self.H_arr)
+
+        self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
 
         if just_H:
             return self.H
 
-        # self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
-
         eigenvalues, eigenvectors = None, None
         
-        if (self.N==1 and self.M==1) or cutoff <= 4:
-            # Convert to dense NumPy array
+        if (self.N==1 and self.M==1) or cutoff <= 4 \
+            or (self.M==3  and self.N==1 and self.EJN/self.EJM > 100/3) \
+            or (self.M==2  and self.N==1 and self.EJN/self.EJM > 100/3) \
+            or (self.M==2 and self.N==2 and (self.EJN/self.EJM >= 100/4 or self.EJM/self.EJN >= 100/4)):
+            
+            eigenvalues, eigenvectors = compute_eigh(self.H_arr)
+            # # Convert to dense NumPy array
 
-            eigenvalues, eigenvectors = tf.linalg.eigh(self.H_arr)
-            # Convert to numpy for inspection (if needed)
-            eigenvalues = eigenvalues.numpy()
-            eigenvectors = eigenvectors.numpy()
+            # eigenvalues, eigenvectors = tf.linalg.eigh(self.H_arr)
+            # # Convert to numpy for inspection (if needed)
+            # eigenvalues = eigenvalues.numpy()
+            # eigenvectors = eigenvectors.numpy()
         else:
             eigenvalues, eigenvectors = spla.eigsh(self.H, which='SA', k=self.dims)
         
@@ -636,9 +650,10 @@ def compute_cutoff(EJN, EJM, EC, cutoff_space=[2, 8]):
         # return np.round(base - midpoint_adjustment)
         distortion_factor = 2.2
         midpoint_adjustment = distortion_factor * (1 - np.abs(np.log10(ratio) - np.log10(20)))  # Distortion closer to midpoint
-        return round(base - midpoint_adjustment + 0.5)
+        return int(round(base - midpoint_adjustment + 0.5))
 
     # Map log10(ratio) from [log10(1), log10(100)] to [2, 10]
     cutoff_N = distorted_interp_function(EJN / EC)
     cutoff_M = distorted_interp_function(EJM / EC)
-    return int(np.round(np.sqrt((cutoff_M**2 + cutoff_N**2)/2)))
+    # return int(np.round(np.sqrt((cutoff_M**2 + cutoff_N**2)/2)))
+    return max(cutoff_M, cutoff_N)
