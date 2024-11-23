@@ -656,4 +656,4 @@ def compute_cutoff(EJN, EJM, EC, cutoff_space=[2, 8]):
     cutoff_N = distorted_interp_function(EJN / EC)
     cutoff_M = distorted_interp_function(EJM / EC)
     # return int(np.round(np.sqrt((cutoff_M**2 + cutoff_N**2)/2)))
-    return max(cutoff_M, cutoff_N)
+    return int(max(cutoff_M, cutoff_N))
