@@ -74,6 +74,8 @@ class Nmon:
         self.evecs = None
         self.evals = None
 
+        self.bound_state_energies = None
+
         self.left_phi = -np.pi
         self.right_phi = np.pi
         self.N_phi = 100
@@ -244,8 +246,9 @@ class Nmon:
         else:
             self.H_arr = self.H # TODO make real
 
-        self.H = scipy.sparse.csr_matrix(np.absolute(self.H))
-        self.H_arr = np.absolute(self.H_arr)
+        if flux == 0 or flux == 0.0:
+            self.H = scipy.sparse.csr_matrix(np.absolute(self.H))
+            self.H_arr = np.absolute(self.H_arr)
 
         self.sym_hamiltonian  = self.nmon_circ.sym_hamiltonian(return_expr=True)
 
@@ -254,12 +257,10 @@ class Nmon:
 
         eigenvalues, eigenvectors = None, None
         
-        if (self.N==1 and self.M==1) or cutoff <= 4 \
-            or (self.M==4  and self.N==1 and (self.EJN/self.EJM > 100/3 or cutoff <= 3)) \
-            or (self.M==3  and self.N==1 and self.EJN/self.EJM > 100/3) \
-            or (self.M==2  and self.N==1 and self.EJN/self.EJM > 100/3) \
-            or (self.M==3  and self.N==2 and (self.EJN/self.EJM > 100/5 or cutoff <= 3)) \
-            or (self.M==2 and self.N==2 and (self.EJN/self.EJM >= 100/4 or self.EJM/self.EJN >= 100/4)):
+        if (self.N==1 and self.M==1) \
+            or (self.M==3  and self.N==1 and (self.EJN/self.EJM > 100/3  or cutoff <= 4)) \
+            or (self.M==2  and self.N==1 and (self.EJN/self.EJM > 100/3  or cutoff <= 4)) \
+            or (self.M==2 and self.N==2 and (self.EJN/self.EJM >= 100/4 or self.EJM/self.EJN >= 100/4  or cutoff <= 4)):
             
             eigenvalues, eigenvectors = compute_eigh(self.H_arr)
             # # Convert to dense NumPy array
