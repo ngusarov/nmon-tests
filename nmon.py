@@ -70,6 +70,7 @@ class Nmon:
 
         self.H = None
         self.H_arr = None
+        self.dH_dng  = None
         self.sym_hamiltonian = None
         self.evecs = None
         self.evals = None
@@ -180,7 +181,7 @@ class Nmon:
 
     def hamiltonian_calc(self, flux, ng, make_plot=False, num_levels=6, just_H=False, cutoff=6):
 
-        self.flag_calc_transitions = False
+        self.flag_calc_transitions = True
 
         if self.N+self.M-1 == 1:
             self.nmon_circ.cutoff_n_1 = cutoff
@@ -293,8 +294,8 @@ class Nmon:
 
         # self.calc_wavefunctions(make_plot=make_plot)
 
-        # self.transition_matrix = None
-        # self.calc_transition_matrix(make_plot=make_plot)
+        self.transition_matrix = None
+        self.calc_transition_matrix(make_plot=make_plot)
 
         self.transition_freqs = []
         self.relative_anharm = None
@@ -469,7 +470,6 @@ class Nmon:
         eigenvectors = self.evecs
         eigenvalues = self.evals
 
-
         # Parameters
         ncut = self.nmon_circ.cutoff_n_1  # Charge basis cutoff
         n_vals = np.arange(-ncut, ncut + 1)
@@ -480,38 +480,27 @@ class Nmon:
         M = self.M  # Replace with your actual M
         num_vars = N + M - 1  # Total number of phase variables (e.g., 3)
 
-        n_grids = np.meshgrid(*([n_vals] * num_vars), indexing='ij')
-
         # Generate all possible combinations of charge states
         state_list = list(itertools.product(n_vals, repeat=num_vars))
         N_states = len(state_list)  # Should be 7 ** num_vars
 
-        # Mapping from multi-dimensional index to 1D index
-        index_map = {state: idx for idx, state in enumerate(state_list)}
-
         # Mapping from 1D index to multi-dimensional index
+        index_map = {state: idx for idx, state in enumerate(state_list)}
         inverse_index_map = {idx: state for idx, state in enumerate(state_list)}
 
         num_levels = eigenvectors.shape[1]  # Number of energy levels
 
-        # Assuming eigenvectors is of shape (N_states, num_levels)
-        dim_sizes = [dim_size] * num_vars
-        eigenvectors_md_shape = dim_sizes + [num_levels]
-        eigenvectors_md = np.zeros(eigenvectors_md_shape, dtype=complex)
-
-        # Populate the multi-dimensional eigenvector arrays
-        for idx in range(N_states):
-            indices = inverse_index_map[idx]
-            indices_array = np.array(indices) + ncut  # Adjust indices to start from 0
-            eigenvectors_md[tuple(indices_array)] = eigenvectors[idx, :]
-
+        # Reshape eigenvectors into a multidimensional form for compatibility
+        eigenvectors_md = eigenvectors.reshape(
+            [dim_size] * num_vars + [num_levels]
+        )
 
         # Generate symbolic phase variables theta1, theta2, ..., thetan
         n_symbols = sp.symbols(f'n1:{num_vars+1}')  # Generates theta1 to thetan
-        ng_symbols = sp.symbols(f'n_g1:{num_vars+1}')  # Generates theta1 to thetan
+        ng_symbols = sp.symbols(f'n_g1:{num_vars+1}')  # Generates n_g1 to n_gn
         _2pi_Phi1 = sp.symbols('(2πΦ_{1})')
 
-        # Compute derivatives with respect to each theta_i
+        # Compute derivatives with respect to each n_g
         derivatives = []
         for ng_sym in ng_symbols:
             dH_dng = self.sym_hamiltonian.diff(ng_sym)
@@ -520,24 +509,38 @@ class Nmon:
         # Sum all the derivatives to get the gradient
         gradient_H = sum(derivatives)
 
-        gradient_H = gradient_H.subs({_2pi_Phi1: 2*np.pi*self.flux})
+        # Substitute flux and n_g values
+        gradient_H = gradient_H.subs({_2pi_Phi1: 2 * np.pi * self.flux})
         for i, ng_sym in enumerate(ng_symbols):
             gradient_H = gradient_H.subs({ng_sym: self.ng[i]})
 
         # Convert the symbolic expression to a numerical function
         gradient_func = sp.lambdify(n_symbols, gradient_H, modules=['numpy'])
 
+        # Compute G_ng over the grid
+        n_grids = np.meshgrid(*([n_vals] * num_vars), indexing='ij')
         G_ng = gradient_func(*n_grids)
+
+        self.dH_dng = G_ng
 
         transition_matrix = np.zeros((num_levels, num_levels), dtype=float)
 
+        # Calculate the transition matrix
         for i in range(num_levels):
-            psi_i = eigenvectors_md[..., i]
+            psi_i = eigenvectors[:, i]  # Extract eigenvector i
+            psi_i_md = psi_i.reshape([dim_size] * num_vars)  # Reshape to grid dimensions
+            norm_psi_i = np.sum(np.abs(psi_i_md)**2)  # Normalize in multidimensional form
+
             for j in range(num_levels):
-                psi_j = eigenvectors_md[..., j]
+                psi_j = eigenvectors[:, j]  # Extract eigenvector j
+                psi_j_md = psi_j.reshape([dim_size] * num_vars)  # Reshape to grid dimensions
+                norm_psi_j = np.sum(np.abs(psi_j_md)**2)  # Normalize in multidimensional form
+
                 # Compute the element-wise product and sum over all indices
-                M_ij = np.sum(np.conj(psi_i) * G_ng * psi_j) / ( np.sum(np.conj(psi_i) * psi_i) * np.sum(np.conj(psi_j) * psi_j) )
+                M_ij = np.sum(np.conj(psi_i_md) * G_ng * psi_j_md) / (norm_psi_i * norm_psi_j)
                 transition_matrix[i, j] = np.real(M_ij)
+                if np.abs(eigenvalues[j] - eigenvalues[i]) < 1e-3:
+                    transition_matrix[i, j] = 0
 
         self.transition_matrix = transition_matrix
 
@@ -558,11 +561,11 @@ class Nmon:
             cbar = fig.colorbar(cax)
             plt.show()
 
+            result_matrix = np.zeros((num_levels, num_levels), dtype=int)
+            for i in range(num_levels):
+                for j in range(num_levels):
+                    result_matrix[i, j] = int(transition_matrix[i, j] >= np.max(transition_matrix[i, :])*1e-1)
             
-            diagonal_elements = np.abs(np.diag(transition_matrix))
-            mask = np.abs(transition_matrix) >= 1e-2 #diagonal_elements[:, None]
-            np.fill_diagonal(mask, 0)
-            result_matrix = mask.astype(int)
             plt.imshow(np.absolute(result_matrix[:, :]), cmap='viridis', interpolation='nearest')
             plt.colorbar()
             plt.show()
@@ -584,7 +587,7 @@ class Nmon:
                 for _ in range(n - 1):
 
                     # Find the index of the maximum element in the current row (dominating transition)
-                    # next_state = (current_state+1)+np.argmax(matrix[current_state][current_state+1:])
+                    max_magnitude = np.max(matrix[current_state][current_state+1:])
                     
                     # print(matrix[current_state][current_state+1:])
                     # print(matrix[current_state, current_state])
@@ -593,7 +596,7 @@ class Nmon:
                     #                                            >= 1e3*matrix[current_state, current_state]))
                     
                     next_state_index = np.where(np.array(matrix[current_state][current_state+1:]) 
-                                                            >= 1e-2 )[0]
+                                                            >= max_magnitude*1e-1 )[0]
                     
                     if len(next_state_index) == 0:
                         break
