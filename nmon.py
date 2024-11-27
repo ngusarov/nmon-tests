@@ -281,7 +281,7 @@ class Nmon:
         self.evals = self.evals[:self.dims]
         self.evecs = self.evecs[:, :self.dims]
 
-        self.bound_state_energies = self.evals
+        self.bound_state_energies = np.array(self.evals, dtype=float)
         
 
 
