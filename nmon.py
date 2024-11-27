@@ -15,6 +15,7 @@ from IPython.display import display, Markdown, HTML, clear_output
 from sympy import *
 import scqubits.core.units as units
 import scipy.sparse.linalg as spla
+from scipy.linalg import eigh_tridiagonal
 import sympy as sp
 import itertools
 import tensorflow as tf
@@ -31,6 +32,10 @@ Phi0 = 2.067e-15
 @njit
 def compute_eigh(H):
     return np.linalg.eigh(H)
+
+@njit
+def compute_eigh_tridiagonal(H):
+    return eigh_tridiagonal(np.diag(H, k=0), np.diag(H, k=+1))
 
 class Nmon:
 
@@ -243,9 +248,9 @@ class Nmon:
         self.H = self.nmon_circ.hamiltonian() # sparse array (or not)
         
         if type(self.H) == scipy.sparse._csc.csc_matrix:
-            self.H_arr = self.H.toarray() # TODO make real
+            self.H_arr = self.H.toarray()
         else:
-            self.H_arr = self.H # TODO make real
+            self.H_arr = self.H
 
         if flux == 0 or flux == 0.0:
             self.H = scipy.sparse.csr_matrix(np.absolute(self.H))
