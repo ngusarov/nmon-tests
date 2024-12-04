@@ -564,7 +564,7 @@ class Nmon:
             result_matrix = np.zeros((num_levels, num_levels), dtype=int)
             for i in range(num_levels):
                 for j in range(num_levels):
-                    result_matrix[i, j] = int(transition_matrix[i, j] >=  10**( int(np.log10( np.max(transition_matrix[i, :]) )) - 1 ) )
+                    result_matrix[i, j] = int(transition_matrix[i, j] >=  10**( int(np.log10( np.max(transition_matrix[i, :]) )) - 2 ) )
             
             plt.imshow(np.absolute(result_matrix[:, :]), cmap='viridis', interpolation='nearest')
             plt.colorbar()
@@ -596,7 +596,7 @@ class Nmon:
                     #                                            >= 1e3*matrix[current_state, current_state]))
                     
                     next_state_index = np.where(np.array(matrix[current_state][current_state+1:]) 
-                                                            >= 10**( int(np.log10( max_magnitude )) - 1 ) )[0]
+                                                            >= 10**( int(np.log10( max_magnitude )) - 2 ) )[0]
                     
                     if len(next_state_index) == 0:
                         break
