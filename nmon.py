@@ -257,9 +257,10 @@ class Nmon:
             return self.H
 
         eigenvalues, eigenvectors = None, None
+
+        # or (self.M==4  and self.N==1 and (self.EJN/self.EJM > 100/3  or cutoff <= 4)) \
         
         if (self.N==1 and self.M==1) \
-            or (self.M==4  and self.N==1 and (self.EJN/self.EJM > 100/3  or cutoff <= 4)) \
             or (self.M==3  and self.N==1 and (self.EJN/self.EJM > 100/3  or cutoff <= 4)) \
             or (self.M==2  and self.N==1 and (self.EJN/self.EJM > 100/3  or cutoff <= 4)) \
             or (self.M==2 and self.N==2 and (self.EJN/self.EJM >= 100/4 or self.EJM/self.EJN >= 100/4  or cutoff <= 4)):
